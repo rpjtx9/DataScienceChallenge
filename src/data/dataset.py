@@ -14,19 +14,20 @@ from spellchecker import SpellChecker
 import seaborn as sns
 
 # pd.set_option('display.max_columns', None)
-pd.set_option('display.max_row', None)
+# pd.set_option('display.max_row', None)
 # pd.set_option('display.max_colwidth', None)
 
-def clean_sales_dataframe():
+def get_sales_dataframe():
     '''
     Function takes no arguments and returns the car sales dataframe after being cleaned.
 
-    Cleaning involved:
+    Cleaning involves:
         Changing Zip Code to string type
         Exploding each item in Vehicle History into a new column with 1 = True and 0 = False and dropping the original Vehicle History column
         Exploding the VehDriveTrain column into new columns with 4WD and AWD. 1 = True and 0 = False. Then dropping  the original VehDriveTrain column
         Getting the number of cylinders and the cylinder size from the  VehEngine column and dropping the original VehEngine column
-        Splitting the
+        Homogenizing Interior colors
+        Determining if there  is a trycoat and homogenizing exterior colors, dropping any that have less than 5
     '''
     # Get the list of all column names so we can exclude reading some rows for efficiency
     column_names = list(pd.read_csv(os.path.join(data_path, "Training_Dataset.csv"),nrows=1))
@@ -40,8 +41,6 @@ def clean_sales_dataframe():
 
     # Convert zip codes to strings since it pulls as a float
     df['SellerZip'] = df['SellerZip'].astype(str)
-
-
 
     def clean_VehHistory():
         '''
@@ -67,9 +66,8 @@ def clean_sales_dataframe():
         df['VehHistory'] = df['VehHistory'].replace({np.nan : 'No History'})
         # Now add new Vehicle History columns to the dataframe and populate them if the VehHistory column contains the substring, then drop the original VehHistory column since it's not needed
         for name in  history:
-            df[name] = np.where(df['VehHistory'].str.contains(name, regex = False), 1, 0)
+            df[name] = np.where(df['VehHistory'].str.contains(name, regex = False, flags = re.IGNORECASE), 1, 0)
         df.drop(columns = 'VehHistory', inplace = True)
-
 
 
     def clean_VehDriveTrain():
@@ -86,7 +84,6 @@ def clean_sales_dataframe():
         # Drop VehDriveTrain now that we're done with it
 
         df.drop(columns = 'VehDriveTrain', inplace = True)
-
 
 
     def clean_VehEngine():
@@ -107,14 +104,15 @@ def clean_sales_dataframe():
         df['NumCylinders'] = df['NumCylinders'].fillna(df['VehEngine'].str.extract(r'(\d).?cyl', expand = False, flags = re.IGNORECASE)).astype('Int64')
 
         # Next we will pull the cylinder size from VehEngine into its own column.
-        df['CylinderSize'] = df['VehEngine'].str.extract(r'(\d\.\d).?L', flags = re.IGNORECASE)
+        df['CylinderSize'] = df['VehEngine'].str.extract(r'(\d\.\d).?L', flags = re.IGNORECASE, expand = False)
+        # Convert to float64. 
+        df['CylinderSize'] = df['CylinderSize'].astype(np.float64)
 
         # Finally we will check for a HEMI
         df['HEMI'] = np.where(df['VehEngine'].str.contains('HEMI', regex = False, flags = re.IGNORECASE), 1, 0)
 
         # And then drop the old VehEngine column
         df.drop(columns = 'VehEngine', inplace = True)
-
 
 
     def clean_VehColorInt():
@@ -185,22 +183,30 @@ def clean_sales_dataframe():
         '''
 
 
-# Primarily want to determine if there is a tricoat utilized as those are more expensive colors
+        # First we want to determine if there is a tricoat or metallic paint utilized as those are more expensive colors
+
+        df['Tricoat'] = np.where(df['VehColorExt'].str.contains('tri.?co|pearl|3.?co|crystal', regex = True, flags = re.IGNORECASE), 1, 0)
+        df['Metallic'] = np.where(df['VehColorExt'].str.contains('metallic', regex = True, flags = re.IGNORECASE), 1, 0)
+
+        # Since we've pulled this information out we can now drop these words from the column and strip any leftover whitespace
+        df['VehColorExt'] = df['VehColorExt'].str.replace(r'(pearl\b|\w+?.?\s?coat\b|metallic|crystal|coat)', '', regex = True, flags = re.IGNORECASE).str.strip()
+
+        # Next we need to group colors. This is more difficult than interiors as exterior colors can have very specific names. So we will keep quite a bit more. If there's less than 5 we will mark it as other. 
+        # Everything above 5 looks to be a real color
+        
+        for color in df['VehColorExt']:
+            if (df['VehColorExt'].values == color).sum() < 5:
+                df['VehColorExt'] = df['VehColorExt'].replace(color, 'other')
 
 
-    
 
-    # for key in df:
-    #     print(df[key].describe(), '\n')
-
-    # Run the  defined cleaning functions
+    # Run the relevant cleaning functions
     clean_VehHistory()
     clean_VehColorInt()
     clean_VehEngine()
     clean_VehDriveTrain()
+    clean_VehColorExt()
 
-    print(df['IntColor1'].value_counts())
+    # df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Dataset.csv')
 
-
-
-clean_sales_dataframe()
+    return df
