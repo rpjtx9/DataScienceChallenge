@@ -1,18 +1,14 @@
-from cmath import nan
 import spellchecker
-import torch
-import math
 import pandas as pd
 import os
 import numpy as np
 from .. helpers.helpers import root_path, data_path, file_path
-import matplotlib.pyplot as plt
-from IPython.core.pylabtools import figsize
 import re
 from spellchecker import SpellChecker
 
-import seaborn as sns
 
+
+# Options for viewing the dataframe:
 # pd.set_option('display.max_columns', None)
 # pd.set_option('display.max_row', None)
 # pd.set_option('display.max_colwidth', None)
@@ -199,7 +195,6 @@ def get_sales_dataframe():
                 df['VehColorExt'] = df['VehColorExt'].replace(color, 'other')
 
 
-
     # Run the relevant cleaning functions
     clean_VehHistory()
     clean_VehColorInt()
@@ -207,6 +202,11 @@ def get_sales_dataframe():
     clean_VehDriveTrain()
     clean_VehColorExt()
 
+    # Uncomment this to look at cleaned dataframe in csv
     # df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Dataset.csv')
 
+    
     return df
+
+# Uncomment when testing this file
+# get_sales_dataframe()
