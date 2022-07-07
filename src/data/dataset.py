@@ -136,11 +136,8 @@ def clean_sales_dataframe():
     df['IntColor1'] = df['IntColor1'].str.replace(' leather', '').str.strip()
     df['IntColor1'] = df['IntColor1'].str.replace(' cloth', '').str.strip()
 
-    
-    df['IntColor2'] = df['VehColorInt'].str.extract(r'/.*?(\w+.?\w+?.?\w+.?\w+)', flags = re.IGNORECASE, expand = False)
 
-
-    df[['IntColor1', 'IntColor2']] = df[['IntColor1', 'IntColor2']].fillna('N/A')
+    df[['IntColor1', 'IntColor2']] = df['IntColor1'].fillna('N/A')
 
     # Disable chain warnings for the following replacement function, it's working as intended and the warning is a false alarm
     pd.options.mode.chained_assignment = None  # default='warn'
