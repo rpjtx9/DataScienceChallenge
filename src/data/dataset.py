@@ -1,4 +1,5 @@
 from cmath import nan
+import spellchecker
 import torch
 import math
 import pandas as pd
@@ -8,6 +9,7 @@ from .. helpers.helpers import root_path, data_path, file_path
 import matplotlib.pyplot as plt
 from IPython.core.pylabtools import figsize
 import re
+from spellchecker import SpellChecker
 
 import seaborn as sns
 
@@ -15,7 +17,7 @@ import seaborn as sns
 # pd.set_option('display.max_row', None)
 # pd.set_option('display.max_colwidth', None)
 
-def get_sales_dataframe():
+def clean_sales_dataframe():
     '''
     Function takes no arguments and returns the car sales dataframe after being cleaned.
 
@@ -23,13 +25,15 @@ def get_sales_dataframe():
         Changing Zip Code to string type
         Exploding each item in Vehicle History into a new column with 1 = True and 0 = False and dropping the original Vehicle History column
         Exploding the VehDriveTrain column into new columns with 4WD and AWD. 1 = True and 0 = False. Then dropping  the original VehDriveTrain column
+        Getting the number of cylinders and the cylinder size from the  VehEngine column and dropping the original VehEngine column
+        Splitting the
     '''
     # Get the list of all column names so we can exclude reading some rows for efficiency
     column_names = list(pd.read_csv(os.path.join(data_path, "Training_Dataset.csv"),nrows=1))
 
     # Read the file into a dataframe, exclude rows we don't want.
     # Excluding seller notes because they're not trustworthy. Bodystyle and VehType because 100% of the body style is SUV. VehFeats is unreliable due to the different reporting styles between sellers
-    df = pd.read_csv(os.path.join(data_path, "Training_Dataset.csv"), usecols = [column for column in column_names if column not in ('VehSellerNotes', 'VehBodystyle', 'VehType', 'VehFeats')])
+    df = pd.read_csv(os.path.join(data_path, "Training_Dataset.csv"), usecols = [column for column in column_names if column not in ('VehSellerNotes', 'VehBodystyle', 'VehType', 'VehFeats', 'VehTransmission', 'ListingID')])
 
     # Convert zip codes to strings
     df['SellerZip'] = df['SellerZip'].astype(str)
@@ -94,6 +98,10 @@ def get_sales_dataframe():
     df['AWD'] = np.where(df['VehDriveTrain'].str.contains('AWD|All Wheel Drive|All-Wheel Drive|All Wheel|AllWheelDrive', flags=re.IGNORECASE, regex=True), 1, 0)
     df['4WD'] = np.where(df['VehDriveTrain'].str.contains('4x4|4WD|Four Wheel Drive', flags=re.IGNORECASE, regex=True), 1, 0)
 
+    # Drop VehDriveTrain now that we're done with it
+
+    df.drop(columns = 'VehDriveTrain', inplace = True)
+
     # Next clean VehEngine
     # The information needing out of VehEngine is how many cylinders it has and what size the cylinders are. I guess we can pull Hemi too.
 
@@ -118,9 +126,70 @@ def get_sales_dataframe():
     df.drop(columns = 'VehEngine', inplace = True)
 
 
+    # Cleaning the interior color column:
+    
+    # Extract multiple interior colors into IntColor1, make all lowercase
+    df['IntColor1'] = df['VehColorInt'].str.extract(r'(\w+\s?\w+?\s?\w+\s?\w+\s?).*?w?/?', flags = re.IGNORECASE, expand = False).str.lower()
 
-    print(df.loc[df['HEMI'] == 1, ['CylinderSize', 'HEMI']])
+    # The regex occasionally pulled W's and the word leather so remove and clean up whitespace:
+    df['IntColor1'] = df['IntColor1'].str.replace(' w', '').str.strip()
+    df['IntColor1'] = df['IntColor1'].str.replace(' leather', '').str.strip()
+    df['IntColor1'] = df['IntColor1'].str.replace(' cloth', '').str.strip()
+
+    
+    df['IntColor2'] = df['VehColorInt'].str.extract(r'/.*?(\w+.?\w+?.?\w+.?\w+)', flags = re.IGNORECASE, expand = False)
+
+
+    df[['IntColor1', 'IntColor2']] = df[['IntColor1', 'IntColor2']].fillna('N/A')
+
+    # Disable chain warnings for the following replacement function, it's working as intended and the warning is a false alarm
+    pd.options.mode.chained_assignment = None  # default='warn'
+
+    # Run a spellcheck to catch basic misspellings. Adding already found value to a dictionary to skip running spellcheck on duplicates; this dramatically improves efficiency
+    colors = {}
+    for i, value in enumerate(df['IntColor1']):
+        if value in colors:
+            df['IntColor1'][i] = colors[value]
+        else:
+            words = value.split(' ')
+            for word in words:
+                word.replace(word, SpellChecker(distance=1).correction(word))
+            spellchecked_value = ' '.join(words)
+            colors[value] = spellchecked_value
+            df['IntColor1'][i] = colors[value]
+
+    # Then map similar colors together. Adding values such as cirrus, maple, frost and sahara in because they are very common colors for these cars. Anything else is too small of a sample and will be marked other.
+    color_map = {
+        'black' : 'black',
+        'beige' : 'beige',
+        'frost' : 'beige',
+        'sahara' : 'beige',
+        'red' : 'red',
+        'blue' : 'blue',
+        'brown' : 'brown',
+        'maple' : 'brown',
+        'tan' : 'brown',
+        'grey' : 'grey',
+        'gray' : 'grey',
+        'cirrus': 'cirrus'
+    }
+    for i, value in enumerate(df['IntColor1']):
+        mapped = 0
+        for key in color_map:
+            if key in value:
+                df['IntColor1'][i] = color_map[key]
+                mapped = 1
+        if not mapped:    
+                df['IntColor1'][i] = 'other'
+
+
+
+    
+    print(df['IntColor2'].unique())
+    print(df['IntColor2'].value_counts())
     # for key in df:
     #     print(df[key].describe(), '\n')
 
-get_sales_dataframe()
+
+
+clean_sales_dataframe()
