@@ -42,19 +42,57 @@ def get_listing_price_dataframe(training_dataset_filename):
     # Clean the data in the raw dataset to improve modeling behavior. Uncomment the to_csv option to export
     df = clean_dataframe(raw_dataset)
 
-    df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Dataset.csv', index = False)
+    df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Listing_Price_Dataset.csv', index = False)
 
     # Transform the dataframe by dummying categorical columns and adding log and sqrt functions for numerical columns. Uncomment the to_csv option to export
-    features = transform_dataframe(df)
+    features = transform_dataframe(df, VehicleTrim = False)
 
-    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Transformed_Dataset.csv', index = False)
+    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Transformed_Listing_Price_Dataset.csv', index = False)
 
     # Remove features that are collinear to improve modeling behavior. Threshold is defaulted at 0.6 but can be adjusted. Uncomment the to_csv option to export
     features = generalize_collinear_feats(features, 0.6, 'Dealer_Listing_Price')
 
-    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Generalized_Dataset.csv', index = False)
+    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Generalized_Listing_Price_Dataset.csv', index = False)
 
     return features
+
+
+def get_vehicle_trim_dataframe(training_dataset_filename):
+    '''
+    Function takes the filename of the dataset that excludes Dealer Listing Price and returns the Vehicle Trim dataframe after being cleaned, transformed, and feature engineered.
+
+    '''
+    # Get the list of all column names so we can exclude reading some rows for efficiency
+    column_names = list(pd.read_csv(os.path.join(data_path, training_dataset_filename),nrows=1))
+
+    # Read the file into a dataframe, exclude rows we don't want.
+    # Excluding:
+    # Seller notes because there's no standard information to pull out, it's just noise
+    # Bodystyle and VehType because they are zero variance variables
+    # VehFeats is unreliable due to the different reporting styles between sellers. 
+    # ListingID doesn't contribute.
+    # SellerZip, SellerCity, and SellerState will all correlate too closely with one another. SellerZip seems too specific and has too many categories, SellerState might lose too much information. Going to go with keeping only SellerCity.
+    # SellerName and SellerRating  will also all correlate too closely with one another. Going to keep SellerRating since it's a continuous variable and should be more telling overall.
+    # We exclude the Dealer_Listing_Price from this model as this model will eventually feed the model to get Dealer_Listing_Price, so it can't use th at to train
+    raw_dataset = pd.read_csv(os.path.join(data_path, training_dataset_filename), usecols = [column for column in column_names if column not in ('Dealer_Listing_Price', 'VehSellerNotes', 'VehBodystyle', 'VehType', 'VehFeats', 'VehTransmission', 'ListingID', 'SellerZip', 'SellerState', 'SellerName')])
+
+    # Clean the data in the raw dataset to improve modeling behavior. Uncomment the to_csv option to export
+    df = clean_dataframe(raw_dataset)
+
+    df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Vehicle_Trim_Dataset.csv', index = False)
+
+    # Transform the dataframe by dummying categorical columns and adding log and sqrt functions for numerical columns. Uncomment the to_csv option to export
+    features = transform_dataframe(df, VehicleTrim = True)
+
+    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Transformed_Vehicle_Trim_Dataset.csv', index = False)
+
+    # Remove features that are collinear to improve modeling behavior. Threshold is defaulted at 0.6 but can be adjusted. Uncomment the to_csv option to export
+    features = generalize_collinear_feats(features, 0.6, 'Vehicle_Trim')
+
+    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Generalized_Vehicle_Trim_Dataset.csv', index = False)
+
+    return features
+
 
 
 def clean_dataframe(raw_dataset : pd.DataFrame):
@@ -65,7 +103,10 @@ def clean_dataframe(raw_dataset : pd.DataFrame):
     Exploding the VehDriveTrain column into new columns with 4WD and AWD. 1 = True and 0 = False. Then dropping  the original VehDriveTrain column
     Getting the number of cylinders and the cylinder size from the  VehEngine column and dropping the original VehEngine column
     Homogenizing Interior colors
-    Determining if there  is a trycoat and homogenizing exterior colors, dropping any that have less than 5
+    Determining if there  is a trycoat and homogenizing exterior colors, dropping any that have less than 2% frequency in the overall population
+    Dropping any seller ratings with less than 25 reviews, then rounding Seller Rating into bins of [0, 1, 2, 3, 4, 5] and dropping the review count column
+    Dropping any SellerLists that do not make up at least 1% of the overall frequency to reduce data cardinality
+    Dropping any cities that do  not make up at least 1% of the overall frequency to reduce data cardinality
     '''
     df = clean_VehHistory(raw_dataset)
     df = clean_VehColorInt(df)
@@ -75,6 +116,7 @@ def clean_dataframe(raw_dataset : pd.DataFrame):
     df = clean_SellerRating(df)
     df = clean_SellerListSrc(df)
     df = clean_SellerCity(df)
+    # df = clean_Vehicle_Trim(df)
 
     return df
 
@@ -277,19 +319,30 @@ def clean_SellerListSrc(df):
 
     return df
 
+def clean_Vehicle_Trim(df):
+    df['Vehicle_Trim'] = df['Vehicle_Trim'].fillna('not specified')
+    frequency = df['Vehicle_Trim'].value_counts(normalize = True)
+    for trim in df['Vehicle_Trim'].values:
+        if frequency [trim] < 0.01:
+            df['Vehicle_Trim'] = df['Vehicle_Trim'].replace(trim, 'other')
+    
+    return df
 
-def transform_dataframe(df):
+def transform_dataframe(df, VehicleTrim = True):
     # Get transformed dataframes
-    log_and_sqrt_data = add_log_and_sqrt_data(df)
-    category_data = get_categories(df)
+    log_and_sqrt_data = add_log_and_sqrt_data(df, VehicleTrim)
+    category_data = get_categories(df, VehicleTrim)
 
     # Combine transformed dataframes
     features = pd.concat([log_and_sqrt_data, category_data], axis = 1)
 
     return features
     # Define data transformation functions
-def add_log_and_sqrt_data(df):
-    numbers = df[['SellerRating', 'VehListdays', 'VehMileage', 'Dealer_Listing_Price', 'NumCylinders', 'CylinderSize']]
+def add_log_and_sqrt_data(df, VehicleTrim = True):
+    if VehicleTrim:
+        numbers = df[['SellerRating', 'VehListdays', 'VehMileage', 'NumCylinders', 'CylinderSize']]
+    else:
+        numbers = df[['SellerRating', 'VehListdays', 'VehMileage', 'Dealer_Listing_Price', 'NumCylinders', 'CylinderSize']]
     for column in numbers.columns:
         if column == 'Dealer_Listing_Price':
             next
@@ -303,13 +356,20 @@ def add_log_and_sqrt_data(df):
     return numbers
 
 
-def get_categories(df):
-    categories = df[['SellerCity', 'SellerIsPriv', 'SellerListSrc', 'VehCertified', 'VehColorExt', 'VehFuel', 'VehYear', 'VehMake', 'VehModel', 'VehPriceLabel', 'Vehicle_Trim', 'IntColor1']]
+def get_categories(df, VehicleTrim = True):
+    if VehicleTrim:
+        categories = df[['SellerCity', 'SellerIsPriv', 'SellerListSrc', 'VehCertified', 'VehColorExt', 'VehFuel', 'VehYear', 'VehMake', 'VehModel', 'VehPriceLabel', 'IntColor1']]
+        trim_target = df['Vehicle_Trim']
+    else:
+        categories = df[['SellerCity', 'SellerIsPriv', 'SellerListSrc', 'VehCertified', 'VehColorExt', 'VehFuel', 'VehYear', 'VehMake', 'VehModel', 'VehPriceLabel', 'Vehicle_Trim', 'IntColor1']]
     categories = pd.get_dummies(categories)
 
     binary_categories = df[['0 Owners', '1 Owner', '2 Owners', '3 Owners', '4 Owners', 'Accident(s) Reported', 'Buyback Protection Eligible', 'Non-Personal Use Reported', 'Title Issue(s) Reported', 'HEMI', 'AWD', '4WD', 'Tricoat', 'Metallic']]
 
-    all_categories = pd.concat([categories, binary_categories], axis = 1)
+    if VehicleTrim:
+        all_categories = pd.concat([categories, binary_categories, trim_target], axis = 1)
+    else:
+        all_categories = pd.concat([categories, binary_categories], axis = 1)
 
     return all_categories
 
