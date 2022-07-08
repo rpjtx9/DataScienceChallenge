@@ -12,13 +12,12 @@ import numpy as np
 # Turn off divide by zero errors
 np.seterr(divide = 'ignore') # default = 'warn'
 
-from .helpers.helpers import data_path
 
-from .data.dataset import get_listing_price_dataframe
-
-from .model.train_model import get_baseline, get_listing_price_feats_targets, split_data, impute_missing_values, scale_values, impute_and_scale, mean_absolute_error, fit_and_evaluate, create_listing_price_model
+from .model.train_model import create_listing_price_model, compare_models
 
 
 
 
-create_listing_price_model('Training_DataSet.csv')
+model = create_listing_price_model('Training_DataSet.csv', LinearRegression())
+
+compare_models('Training_DataSet.csv')

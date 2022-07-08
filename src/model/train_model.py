@@ -122,7 +122,7 @@ def fit_and_evaluate(model_type, training_data : pd.DataFrame, training_answers 
     model = model_type
     return model
 
-def create_listing_price_model(dataset_filename):
+def create_listing_price_model(dataset_filename, model_type):
 
 
     master_df = get_listing_price_dataframe(dataset_filename)
@@ -133,58 +133,52 @@ def create_listing_price_model(dataset_filename):
 
     training_data, testing_data, training_answers, testing_answers = impute_and_scale(train_tgts, test_tgts, train_feats, test_feats)
 
-    model_type = LinearRegression()
-
     model = fit_and_evaluate(model_type, training_data, training_answers, testing_data, testing_answers)
 
     return model
 
-# get_baseline()
 
-# lr = LinearRegression()
 
-# lr_mae = fit_and_evaluate(lr)
 
-# print('Linear Regression Performance on the test set: MAE = %0.4f' % lr_mae)
 
-# svm = SVR(C = 1000, gamma = 0.1)
-# svm_mae = fit_and_evaluate(svm)
-# print('Support Vector Machine Regression Performance on the test set: MAE = %0.4f' % svm_mae)
+def compare_models(dataset_filename):
 
-# random_forest = RandomForestRegressor(random_state = 69)
-# random_forest_mae = fit_and_evaluate(random_forest)
-# print('Random Forest Performance on the test set: MAE = %0.4f' % random_forest_mae)
+    plt.style.use('fivethirtyeight')
+    figsize(15, 6)
 
-# gradient_boosted = GradientBoostingRegressor(random_state=60)
-# gradient_boosted_mae = fit_and_evaluate(gradient_boosted)
+    master_df = get_listing_price_dataframe(dataset_filename)
 
-# print('Gradient Boosted Regression Performance on the test set: MAE = %0.4f' % gradient_boosted_mae)
+    features, targets = get_listing_price_feats_targets(master_df)
 
-# knn = KNeighborsRegressor(n_neighbors=10)
-# knn_mae = fit_and_evaluate(knn)
+    train_feats, test_feats, train_tgts, test_tgts = split_data(features, targets)
 
-# print('K-Nearest Neighbors Regression Performance on the test set: MAE = %0.4f' % knn_mae)
+    training_data, testing_data, training_answers, testing_answers = impute_and_scale(train_tgts, test_tgts, train_feats, test_feats)
 
-# plt.style.use('fivethirtyeight')
-# figsize(15, 6)
+    model_types = [LinearRegression(), SVR(C = 1000, gamma = 0.1), RandomForestRegressor(random_state = 69), GradientBoostingRegressor(random_state = 60), KNeighborsRegressor(n_neighbors = 10)]
 
-# # Dataframe to hold the results
-# model_comparison = pd.DataFrame({'model': ['Linear Regression', 'Support Vector Machine',
-#                                            'Random Forest', 'Gradient Boosted',
-#                                             'K-Nearest Neighbors'],
-#                                  'M.A.E.': [lr_mae, svm_mae, random_forest_mae, 
-#                                          gradient_boosted_mae, knn_mae]})
+    mae = []
+    for modeltype in model_types:
+        model = fit_and_evaluate(modeltype, training_data, training_answers, testing_data, testing_answers)
+        model_pred = model.predict(testing_data)
+        model_mae = mean_absolute_error(testing_answers, model_pred)
+        mae.append(model_mae)
 
-# # Horizontal bar chart of test mae
-# model_comparison.sort_values('M.A.E.', ascending = False).plot(x = 'model', y = 'M.A.E.', kind = 'barh',
-#                                                            color = 'red', edgecolor = 'black')
+    model_comparison = pd.DataFrame({'model': ['Linear Regression', 'Support Vector Machine',
+                                            'Random Forest', 'Gradient Boosted',
+                                                'K-Nearest Neighbors'],
+                                    'M.A.E.': mae})
 
-# Plot formatting
-# plt.ylabel(''); plt.yticks(size = 14); plt.xlabel('Mean Absolute Error'); plt.xticks(size = 14)
-# plt.title('Model Comparison on Test Mean Absolute Error', size = 20);
+    # Horizontal bar chart of test mae
+    model_comparison.sort_values('M.A.E.', ascending = False).plot(x = 'model', y = 'M.A.E.', kind = 'barh',
+                                                            color = 'red', edgecolor = 'black')
 
-# plt.tight_layout()
-# plt.show()
+    # Plot formatting
+
+    plt.ylabel(''); plt.yticks(size = 14); plt.xlabel('Mean Absolute Error'); plt.xticks(size = 14)
+    plt.title('Model Comparison on Test Mean Absolute Error', size = 20);
+
+    plt.tight_layout()
+    plt.show()
 
 # model = LinearRegression()
 
