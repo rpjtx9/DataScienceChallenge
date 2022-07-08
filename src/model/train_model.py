@@ -30,71 +30,113 @@ from sklearn.model_selection import RandomizedSearchCV, GridSearchCV, train_test
 
 import os
 
-from ..data.dataset import get_sales_dataframe
+from ..data.dataset import get_listing_price_dataframe
 
 from ..helpers.helpers import data_path
 
 
-master_df = pd.read_csv(os.path.join(data_path, "Generalized_Dataset.csv"))
 
-price = master_df[master_df['Dealer_Listing_Price'].notnull()]
 
-features = price.drop(columns='Dealer_Listing_Price')
+def get_listing_price_feats_targets(master_df : pd.DataFrame):
+    price = master_df[master_df['Dealer_Listing_Price'].notnull()]
 
-targets = pd.DataFrame(price['Dealer_Listing_Price'])
+    features = price.drop(columns='Dealer_Listing_Price')
 
-train_feats, test_feats, train_tgts, test_tgts = train_test_split(features, targets, test_size = 0.3, random_state = 42)
+    targets = pd.DataFrame(price['Dealer_Listing_Price'])
 
-def get_baseline():
+    return (features, targets)
 
-    def mean_absolute_error(test_target, test_prediction):
-        return np.mean(abs(test_target - test_prediction), axis = 0)
+def split_data(features : pd.DataFrame, targets : pd.DataFrame):
+
+    train_feats, test_feats, train_tgts, test_tgts = train_test_split(features, targets, test_size = 0.3, random_state = 42)
+
+    return train_feats, test_feats, train_tgts, test_tgts
+
+def get_baseline(train_tgts):
 
     baseline = np.median(train_tgts)
 
     print('The baseline guess is a score of %0.2f' % baseline)
-    print("Baseline Performance on the test set: MAE = %0.4f" % mean_absolute_error(test_tgts, baseline))
+
     return baseline
 
 
+def impute_missing_values(train_feats : pd.DataFrame, test_feats : pd.DataFrame):
+    imputer = SimpleImputer(strategy = 'median')
 
-imputer = SimpleImputer(strategy = 'median')
+    imputer.fit(train_feats)
 
-imputer.fit(train_feats)
+    training_data = imputer.transform(train_feats)
+    testing_data = imputer.transform(test_feats)
 
-training_data = imputer.transform(train_feats)
-testing_data = imputer.transform(test_feats)
+    # print(f'Missing values in training features: {np.sum(np.isnan(training_data))}')
+    # print(f'Missing values in testing features: {np.sum(np.isnan(testing_data))}')
 
-# print(f'Missing values in training features: {np.sum(np.isnan(training_data))}')
-# print(f'Missing values in testing features: {np.sum(np.isnan(testing_data))}')
+    # print(np.where(~np.isfinite(training_data)))
+    # print(np.where(~np.isfinite(testing_data)))
 
-# print(np.where(~np.isfinite(training_data)))
-# print(np.where(~np.isfinite(testing_data)))
+    return training_data, testing_data
 
-scaler = MinMaxScaler(feature_range = (0, 1))
+def scale_values(training_data : pd.DataFrame, testing_data : pd.DataFrame, train_tgts : pd.DataFrame, test_tgts : pd.DataFrame):
+    scaler = MinMaxScaler(feature_range = (0, 1))
 
-scaler.fit(training_data)
+    scaler.fit(training_data)
 
-scaler.transform(training_data)
-scaler.transform(testing_data)
+    scaler.transform(training_data)
+    scaler.transform(testing_data)
+    
+    scaled_training_data = training_data
+    scaled_testing_data = testing_data
 
-training_answers = np.array(train_tgts).reshape((-1, ))
-testing_answers = np.array(test_tgts).reshape((-1, ))
+    scaled_training_answers = np.array(train_tgts).reshape((-1, ))
+    scaled_testing_answers = np.array(test_tgts).reshape((-1, ))
+
+    return scaled_training_data, scaled_testing_data, scaled_training_answers, scaled_testing_answers
+
+def impute_and_scale(train_tgts : pd.DataFrame, test_tgts : pd.DataFrame, train_feats : pd.DataFrame, test_feats : pd.DataFrame):
+
+    training_data, testing_data = impute_missing_values(train_feats, test_feats)
+
+    final_training_data, final_testing_data, final_training_answers, final_testing_answers = scale_values(training_data, testing_data, train_tgts, test_tgts)
+
+    return final_training_data, final_testing_data, final_training_answers, final_testing_answers
+    
 
 def mean_absolute_error(test_target, test_prediction):
     return np.mean(abs(test_target - test_prediction), axis = 0)
 
-def fit_and_evaluate(model):
+def fit_and_evaluate(model_type, training_data : pd.DataFrame, training_answers : pd.DataFrame, testing_data : pd.DataFrame, testing_answers : pd.DataFrame):
 
     # Train model:
-    model.fit(training_data, training_answers)
+    model_type.fit(training_data, training_answers)
+
 
     # Make predictions
-    model_pred = model.predict(testing_data)
+    model_pred = model_type.predict(testing_data)
     model_mae = mean_absolute_error(testing_answers, model_pred)
 
+    # Print evaluation
+    print('Model performance on the test set: MAE = %0.4f' % model_mae)
     # Return performance metric
-    return model_mae
+
+    model = model_type
+    return model
+
+def create_listing_price_model(dataset_filename):
+
+    master_df = get_listing_price_dataframe(dataset_filename)
+
+    features, targets = get_listing_price_feats_targets(master_df)
+
+    train_feats, test_feats, train_tgts, test_tgts = split_data(features, targets)
+
+    training_data, testing_data, training_answers, testing_answers = impute_and_scale(train_tgts, test_tgts, train_feats, test_feats)
+
+    model_type = LinearRegression()
+
+    model = fit_and_evaluate(model_type, training_data, training_answers, testing_data, testing_answers)
+
+    return model
 
 # get_baseline()
 
@@ -143,16 +185,16 @@ def fit_and_evaluate(model):
 # plt.tight_layout()
 # plt.show()
 
-model = LinearRegression()
+# model = LinearRegression()
 
-model.fit(training_data, training_answers)
+# model.fit(training_data, training_answers)
 
-prediction = model.predict(testing_data)
+# prediction = model.predict(testing_data)
 
-print('Model performance on the test set: MAE = %0.4f' % mean_absolute_error(testing_answers, prediction))
+# print('Model performance on the test set: MAE = %0.4f' % mean_absolute_error(testing_answers, prediction))
 
 
-figsize(8, 8)
+# figsize(8, 8)
 
 # sns.kdeplot(prediction, label = "Predictions")
 # sns.kdeplot(testing_answers, label = "Values")
@@ -176,9 +218,9 @@ figsize(8, 8)
 # plt.legend()
 # plt.show()
 
-feature_results = pd.DataFrame({'feature': list(train_feats.columns),'importance' : model.coef_})
+# feature_results = pd.DataFrame({'feature': list(train_feats.columns),'importance' : model.coef_})
 
-# Show the top 10 most important
-feature_results = feature_results.sort_values('importance', ascending = False).reset_index(drop=True)
+# # Show the top 10 most important
+# feature_results = feature_results.sort_values('importance', ascending = False).reset_index(drop=True)
 
-print(feature_results.head(25))
+# print(feature_results.head(25))

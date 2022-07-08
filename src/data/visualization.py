@@ -1,12 +1,12 @@
 import matplotlib.pyplot as plt
 from IPython.core.pylabtools import figsize
 import seaborn as sns
-from .dataset import get_sales_dataframe
+from .dataset import get_listing_price_dataframe
 import pandas as pd
 
 pd.set_option('display.max_row', None)
 
-df = get_sales_dataframe()
+df = get_listing_price_dataframe()
 
 def density_plot(ColumnName):
     # Get a list of cylinder sizes

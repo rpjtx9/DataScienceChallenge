@@ -21,7 +21,7 @@ from spellchecker import SpellChecker
 
 
 
-def get_sales_dataframe():
+def get_listing_price_dataframe(training_dataset_filename):
     '''
     Function takes no arguments and returns the car sales dataframe after being cleaned.
 
@@ -34,7 +34,7 @@ def get_sales_dataframe():
         Determining if there  is a trycoat and homogenizing exterior colors, dropping any that have less than 5
     '''
     # Get the list of all column names so we can exclude reading some rows for efficiency
-    column_names = list(pd.read_csv(os.path.join(data_path, "Training_Dataset.csv"),nrows=1))
+    column_names = list(pd.read_csv(os.path.join(data_path, training_dataset_filename),nrows=1))
 
     # Read the file into a dataframe, exclude rows we don't want.
     # Excluding:
@@ -42,9 +42,9 @@ def get_sales_dataframe():
     # Bodystyle and VehType because they are zero variance variables
     # VehFeats is unreliable due to the different reporting styles between sellers. 
     # ListingID doesn't contribute.
-    # SellerZip, SellerCity, and SellerState will all correlate too closely with one another. SellerZip seems too specific and has too many categories, SellerState will lose too much information. Going to go with keeping only SellerCity.
+    # SellerZip, SellerCity, and SellerState will all correlate too closely with one another. SellerZip seems too specific and has too many categories, SellerState might lose too much information. Going to go with keeping only SellerCity.
     # SellerName and SellerRating  will also all correlate too closely with one another. Going to keep SellerRating since it's a continuous variable and should be more telling overall.
-    df = pd.read_csv(os.path.join(data_path, "Training_Dataset.csv"), usecols = [column for column in column_names if column not in ('VehSellerNotes', 'VehBodystyle', 'VehType', 'VehFeats', 'VehTransmission', 'ListingID', 'SellerZip', 'SellerState', 'SellerName')])
+    df = pd.read_csv(os.path.join(data_path, training_dataset_filename), usecols = [column for column in column_names if column not in ('VehSellerNotes', 'VehBodystyle', 'VehType', 'VehFeats', 'VehTransmission', 'ListingID', 'SellerZip', 'SellerState', 'SellerName')])
 
     def clean_SellerCity():
         df['SellerCity'] = df['SellerCity'].fillna('not specified')
@@ -324,4 +324,4 @@ def get_sales_dataframe():
     return generalized_features
 
 # Uncomment when testing this file
-# get_sales_dataframe()
+# get_listing_price_dataframe()
