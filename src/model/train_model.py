@@ -124,6 +124,7 @@ def fit_and_evaluate(model_type, training_data : pd.DataFrame, training_answers 
 
 def create_listing_price_model(dataset_filename):
 
+
     master_df = get_listing_price_dataframe(dataset_filename)
 
     features, targets = get_listing_price_feats_targets(master_df)
