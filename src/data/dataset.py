@@ -1,17 +1,25 @@
 import spellchecker
 import pandas as pd
+
+# Disable chain warnings for the following replacement function, it's working as intended and the warning is a false alarm
+pd.options.mode.chained_assignment = None  # default = 'warn'
+# Options for viewing the dataframe:
+# pd.set_option('display.max_columns', None)
+# pd.set_option('display.max_row', None)
+# pd.set_option('display.max_colwidth', None)
+
 import os
 import numpy as np
+# Turn off divide by zero errors
+
+np.seterr(divide = 'ignore') # default = 'warn'
 from .. helpers.helpers import root_path, data_path, file_path
 import re
 from spellchecker import SpellChecker
 
 
 
-# Options for viewing the dataframe:
-# pd.set_option('display.max_columns', None)
-# pd.set_option('display.max_row', None)
-# pd.set_option('display.max_colwidth', None)
+
 
 def get_sales_dataframe():
     '''
@@ -29,14 +37,23 @@ def get_sales_dataframe():
     column_names = list(pd.read_csv(os.path.join(data_path, "Training_Dataset.csv"),nrows=1))
 
     # Read the file into a dataframe, exclude rows we don't want.
-    # Excluding seller notes because they're not trustworthy.
-    # Bodystyle and VehType because 100% of the data is the same VehTransmission is all automatic. 
+    # Excluding:
+    # Seller notes because there's no standard information to pull out, it's just noise
+    # Bodystyle and VehType because they are zero variance variables
     # VehFeats is unreliable due to the different reporting styles between sellers. 
     # ListingID doesn't contribute.
-    df = pd.read_csv(os.path.join(data_path, "Training_Dataset.csv"), usecols = [column for column in column_names if column not in ('VehSellerNotes', 'VehBodystyle', 'VehType', 'VehFeats', 'VehTransmission', 'ListingID')])
+    # SellerZip, SellerCity, and SellerState will all correlate too closely with one another. SellerZip seems too specific and has too many categories, SellerState will lose too much information. Going to go with keeping only SellerCity.
+    # SellerName and SellerRating  will also all correlate too closely with one another. Going to keep SellerRating since it's a continuous variable and should be more telling overall.
+    df = pd.read_csv(os.path.join(data_path, "Training_Dataset.csv"), usecols = [column for column in column_names if column not in ('VehSellerNotes', 'VehBodystyle', 'VehType', 'VehFeats', 'VehTransmission', 'ListingID', 'SellerZip', 'SellerState', 'SellerName')])
 
-    # Convert zip codes to strings since it pulls as a float
-    df['SellerZip'] = df['SellerZip'].astype(str)
+    def clean_SellerCity():
+        df['SellerCity'] = df['SellerCity'].fillna('not specified')
+        frequency = df['SellerCity'].value_counts(normalize= True)
+        # Get rid of all cities that don't at least appear 1% of the time in the dataset
+        for city in df['SellerCity'].values:
+            if frequency[city] < 0.01:
+                df['SellerCity'] = df['SellerCity'].replace(city, 'other')
+
 
     def clean_VehHistory():
         '''
@@ -127,8 +144,7 @@ def get_sales_dataframe():
 
         df['IntColor1'] = df['IntColor1'].fillna('N/A')
 
-        # Disable chain warnings for the following replacement function, it's working as intended and the warning is a false alarm
-        pd.options.mode.chained_assignment = None  # default='warn'
+
 
         # Run a spellcheck to catch basic misspellings. Adding already found value to a dictionary to skip running spellcheck on duplicates; this dramatically improves efficiency
         colors = {}
@@ -187,26 +203,125 @@ def get_sales_dataframe():
         # Since we've pulled this information out we can now drop these words from the column and strip any leftover whitespace
         df['VehColorExt'] = df['VehColorExt'].str.replace(r'(pearl\b|\w+?.?\s?coat\b|metallic|crystal|coat)', '', regex = True, flags = re.IGNORECASE).str.strip()
 
-        # Next we need to group colors. This is more difficult than interiors as exterior colors can have very specific names. So we will keep quite a bit more. If there's less than 5 we will mark it as other. 
-        # Everything above 5 looks to be a real color
-        
-        for color in df['VehColorExt']:
-            if (df['VehColorExt'].values == color).sum() < 5:
+        # Next we need to group colors. This is more difficult than interiors as exterior colors can have very specific names. So we will keep quite a bit more. If it's less than 2% of the total it gets bucketed into other
+        # Fill NaN values
+        df['VehColorExt'] = df['VehColorExt'].fillna('not specified')
+        frequency = df['VehColorExt'].value_counts(normalize= True)
+        for color in df['VehColorExt'].values:
+            if frequency[color] < 0.02:
                 df['VehColorExt'] = df['VehColorExt'].replace(color, 'other')
+    
 
+    def clean_SellerRating():
+        # Round seller ratings to get specific bins.
+        df['SellerRating'] = df['SellerRating'].round()
 
-    # Run the relevant cleaning functions
+        # Median for seller review count is 126 and first quartile is 28. Going to say if there's less than 25 reviews to throw it out.
+        df['SellerRating'] = np.where(df['SellerRevCnt'] < 25, np.nan, df['SellerRating'])
+
+        # Drop SellerRevCnt as it is not longer useful
+        df.drop(columns = ['SellerRevCnt'])
+
+    def clean_SellerListSrc():
+        df['SellerListSrc'] = df['SellerListSrc'].fillna('not specified')
+        frequency = df['SellerListSrc'].value_counts(normalize= True)
+        for source in df['SellerListSrc'].values:
+            if frequency[source] < 0.01:
+                df['SellerListSrc'] = df['SellerListSrc'].replace(source, 'other')
+
+    
     clean_VehHistory()
     clean_VehColorInt()
     clean_VehEngine()
     clean_VehDriveTrain()
     clean_VehColorExt()
+    clean_SellerRating()
+    clean_SellerListSrc()
+    clean_SellerCity()
 
-    # Uncomment this to look at cleaned dataframe in csv
-    # df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Dataset.csv')
 
+
+    # Define data transformation functions
+    def add_log_data():
+        numbers = df[['SellerRating', 'VehListdays', 'VehMileage', 'Dealer_Listing_Price', 'NumCylinders', 'CylinderSize']]
+        for column in numbers.columns:
+            if column == 'Dealer_Listing_Price':
+                next
+            else:
+                numbers['log_of_' + column] = np.log(numbers[column])
+                numbers['sqrt_of_' + column] = np.sqrt(numbers[column])
+        
+        numbers.replace([np.inf, -np.inf], np.nan, inplace = True)
+        numbers - numbers.fillna(np.nan)
+
+        return numbers
+
+
+    def get_categories():
+        categories = df[['SellerCity', 'SellerIsPriv', 'SellerListSrc', 'VehCertified', 'VehColorExt', 'VehFuel', 'VehYear', 'VehMake', 'VehModel', 'VehPriceLabel', 'Vehicle_Trim', 'IntColor1']]
+        categories = pd.get_dummies(categories)
+
+        binary_categories = df[['0 Owners', '1 Owner', '2 Owners', '3 Owners', '4 Owners', 'Accident(s) Reported', 'Buyback Protection Eligible', 'Non-Personal Use Reported', 'Title Issue(s) Reported', 'HEMI', 'AWD', '4WD', 'Tricoat', 'Metallic']]
+
+        all_categories = pd.concat([categories, binary_categories], axis = 1)
+
+        return all_categories
     
-    return df
+    # Get transformed dataframes
+    log_data = add_log_data()
+    category_data = get_categories()
+
+    # Combine transformed dataframes
+    features = pd.concat([log_data, category_data], axis = 1)
+
+
+    def generalize_collinear_feats(df, threshold):
+        '''
+        Takes in a data frame and compares correlation coefficients between all variables. Removes any that are above the threshold.
+        This will help generalize the model
+        '''
+
+        # Remove the listing price since we don't want to remove those correlations
+        listing_price_copy = df['Dealer_Listing_Price']
+        df.drop(columns = ['Dealer_Listing_Price'], inplace = True)
+
+        # Get the correlation matrix
+        correlations = df.corr()
+        number_columns = range(len(correlations.columns) - 1)
+
+        # Create an empty set to populate with highly correlated columns
+        columns_to_drop = set()
+
+        for i in number_columns:
+            for j in range(i):
+                item = correlations.iloc[j:(j+1), (i+1):(i+2)]
+                columns = item.columns
+                rows = item.index
+                corr_val = abs(item.values)
+
+                if corr_val > threshold:
+                    # Print the correlated features and the correlation value
+                    # print(columns.values[0], "|", rows.values[0], "|", round(corr_val[0][0], 2))
+                    columns_to_drop.add(columns.values[0])
+        
+
+        df.drop(columns = columns_to_drop, inplace = True)
+        df['Dealer_Listing_Price'] = listing_price_copy
+
+        return df
+
+
+
+    generalized_features = generalize_collinear_feats(features, 0.6)
+
+
+    # Uncomment this to look at cleaned and transformed dataframe in csv
+    # df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Dataset.csv', index = False)
+    # features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Transformed_Dataset.csv', index = False)
+    # generalized_features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Generalized_Dataset.csv', index = False)
+    
+
+    return generalized_features
 
 # Uncomment when testing this file
 # get_sales_dataframe()

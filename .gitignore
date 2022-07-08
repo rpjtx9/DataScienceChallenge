@@ -1,0 +1,12 @@
+# Ignore compiled code/pycache
+*.pyc
+__pycache__/
+
+#ignore debug launch json
+.vscode/
+
+#ignore any .db files
+*.db
+
+#ignore datasets
+*.csv
