@@ -35,7 +35,7 @@ from ..data.dataset import get_listing_price_dataframe, get_vehicle_trim_datafra
 
 from ..helpers.helpers import data_path
 
-
+# Got a little too happy with most of these functions, especially with returning Tuples instead of dictionaries. Needs to be reorganized but no time for now.
 
 def get_listing_price_feats_targets(master_df : pd.DataFrame):
     price = master_df[master_df['Dealer_Listing_Price'].notnull()]
@@ -136,7 +136,7 @@ def fit_and_evaluate(model_type, training_data : pd.DataFrame, training_answers 
     model_pred = model_type.predict(testing_data)
     model_mae = mean_absolute_error(testing_answers, model_pred)
     
-
+# Uncomment lines 140-156 if needing to evaluate
     # if VehicleTrim:
     #     # Print Evaluation for categorical target
 
@@ -153,15 +153,20 @@ def fit_and_evaluate(model_type, training_data : pd.DataFrame, training_answers 
     #     print('Model performance on the test set: MAE = %0.4f' % model_mae)
     #     acc = explained_variance_score(testing_answers, model_pred)
     #     print(acc)
-    
-    if cv_test:
-        cross_value(model_type, training_data, training_answers)
+
+    # Uncomment and set cv_test to true in the function call if you want to do cross value checks on a model
+    # if cv_test:
+    #     cross_value(model_type, training_data, training_answers)
         
 
 
 
     model = model_type
     return model
+
+    # Function to create the model from scratch given a dataset. Very useful but likely should break it up a bit more.
+
+    # DEFINITELY should return a dictionary or create a model class instead of these tuples.
 
 def create_model(dataset_filename, model_type, VehicleTrim = True, cv_test = False):
     if VehicleTrim:
@@ -182,7 +187,7 @@ def create_model(dataset_filename, model_type, VehicleTrim = True, cv_test = Fal
 
 
 
-
+# Create a graph to compare models. Currently only useful for continuous data, not classification.
 def compare_models(dataset_filename, VehicleTrim = True):
 
     plt.style.use('fivethirtyeight')
@@ -228,7 +233,7 @@ def compare_models(dataset_filename, VehicleTrim = True):
     plt.show()
 
 
-
+# Cross value testing
 def cross_value(model, training_data, training_answers):
     n_estimators = [10, 50, 100, 200, 300, 500, 750, 1000]
     criterion = ['gini', 'entropy', 'log_loss']
@@ -260,6 +265,8 @@ def cross_value(model, training_data, training_answers):
     results.to_csv('F:/Documents/Projects/DataScienceChallenge/data/random_results.csv')
 
     print(random_cv.best_estimator_)
+
+# All code below was used for evaluation and fit. Did not have time to wrap into functions.
 
 # model = LinearRegression()
 
