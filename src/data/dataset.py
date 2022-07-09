@@ -98,7 +98,6 @@ def get_vehicle_trim_dataframe(training_dataset_filename):
 def clean_dataframe(raw_dataset : pd.DataFrame):
     '''
     Cleaning involves:
-    Changing Zip Code to string type
     Exploding each item in Vehicle History into a new column with 1 = True and 0 = False and dropping the original Vehicle History column
     Exploding the VehDriveTrain column into new columns with 4WD and AWD. 1 = True and 0 = False. Then dropping  the original VehDriveTrain column
     Getting the number of cylinders and the cylinder size from the  VehEngine column and dropping the original VehEngine column
