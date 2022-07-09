@@ -43,8 +43,10 @@ def get_listing_price_feats_targets(master_df : pd.DataFrame):
     features = price.drop(columns='Dealer_Listing_Price')
 
     targets = pd.DataFrame(price['Dealer_Listing_Price'])
-
-    return (features, targets)
+    features.sort_index(axis = 1, inplace = True)
+    targets.sort_index(axis = 1, inplace = True)
+    trim_map = 1
+    return (features, targets, trim_map)
 
 def get_vehicle_trim_feats_targets(master_df : pd.DataFrame):
         
@@ -63,7 +65,9 @@ def get_vehicle_trim_feats_targets(master_df : pd.DataFrame):
 
     for item in trim_map:
         targets['Vehicle_Trim'].replace(item, trim_map[item], inplace = True)
-    
+
+    features.sort_index(axis = 1, inplace = True)
+    targets.sort_index(axis = 1, inplace = True)
     return (features, targets, trim_map)
 
 def split_data(features : pd.DataFrame, targets : pd.DataFrame):
@@ -82,20 +86,14 @@ def get_baseline(train_tgts):
 
 
 def impute_missing_values(train_feats : pd.DataFrame, test_feats : pd.DataFrame):
-    imputer = SimpleImputer(strategy = 'median')
 
+    imputer = SimpleImputer(strategy = 'median')
     imputer.fit(train_feats)
 
     training_data = imputer.transform(train_feats)
     testing_data = imputer.transform(test_feats)
 
-    # print(f'Missing values in training features: {np.sum(np.isnan(training_data))}')
-    # print(f'Missing values in testing features: {np.sum(np.isnan(testing_data))}')
-
-    # print(np.where(~np.isfinite(training_data)))
-    # print(np.where(~np.isfinite(testing_data)))
-
-    return training_data, testing_data
+    return training_data, testing_data, imputer
 
 def scale_values(training_data : pd.DataFrame, testing_data : pd.DataFrame, train_tgts : pd.DataFrame, test_tgts : pd.DataFrame):
     scaler = MinMaxScaler(feature_range = (0, 1))
@@ -111,15 +109,18 @@ def scale_values(training_data : pd.DataFrame, testing_data : pd.DataFrame, trai
     scaled_training_answers = np.array(train_tgts).reshape((-1, ))
     scaled_testing_answers = np.array(test_tgts).reshape((-1, ))
 
-    return scaled_training_data, scaled_testing_data, scaled_training_answers, scaled_testing_answers
+    return scaled_training_data, scaled_testing_data, scaled_training_answers, scaled_testing_answers, scaler
 
 def impute_and_scale(train_tgts : pd.DataFrame, test_tgts : pd.DataFrame, train_feats : pd.DataFrame, test_feats : pd.DataFrame):
 
-    training_data, testing_data = impute_missing_values(train_feats, test_feats)
+    training_data, testing_data, imputer = impute_missing_values(train_feats, test_feats)
 
-    final_training_data, final_testing_data, final_training_answers, final_testing_answers = scale_values(training_data, testing_data, train_tgts, test_tgts)
+    final_training_data, final_testing_data, final_training_answers, final_testing_answers, scaler = scale_values(training_data, testing_data, train_tgts, test_tgts)
 
-    return final_training_data, final_testing_data, final_training_answers, final_testing_answers
+    pd.DataFrame(final_testing_data).to_csv('F:/Documents/Projects/DataScienceChallenge/data/Scaled_Trained_Listing_Price.csv', index = False)
+
+
+    return final_training_data, final_testing_data, final_training_answers, final_testing_answers, imputer, scaler
     
 
 def mean_absolute_error(test_target, test_prediction):
@@ -136,22 +137,22 @@ def fit_and_evaluate(model_type, training_data : pd.DataFrame, training_answers 
     model_mae = mean_absolute_error(testing_answers, model_pred)
     
 
-    if VehicleTrim:
-        # Print Evaluation for categorical target
+    # if VehicleTrim:
+    #     # Print Evaluation for categorical target
 
-        print(classification_report(testing_answers, model_pred))
-        conf_matrix = confusion_matrix(testing_answers, model_pred)
-        disp = ConfusionMatrixDisplay(conf_matrix)
-        acc = accuracy_score(testing_answers, model_pred)
-        print(acc)
-        disp.plot()
-        plt.show()
+    #     print(classification_report(testing_answers, model_pred))
+    #     conf_matrix = confusion_matrix(testing_answers, model_pred)
+    #     disp = ConfusionMatrixDisplay(conf_matrix)
+    #     acc = accuracy_score(testing_answers, model_pred)
+    #     print(acc)
+    #     disp.plot()
+    #     plt.show()
     
-    else:
-        # Print evaluation for numerical target
-        print('Model performance on the test set: MAE = %0.4f' % model_mae)
-        acc = explained_variance_score(testing_answers, model_pred)
-        print(acc)
+    # else:
+    #     # Print evaluation for numerical target
+    #     print('Model performance on the test set: MAE = %0.4f' % model_mae)
+    #     acc = explained_variance_score(testing_answers, model_pred)
+    #     print(acc)
     
     if cv_test:
         cross_value(model_type, training_data, training_answers)
@@ -168,16 +169,15 @@ def create_model(dataset_filename, model_type, VehicleTrim = True, cv_test = Fal
         features, targets, trim_map = get_vehicle_trim_feats_targets(master_df)
     else:
         master_df = get_listing_price_dataframe(dataset_filename)
-        features, targets = get_listing_price_feats_targets(master_df)
-        trim_map = None
+        features, targets, trim_map = get_listing_price_feats_targets(master_df)
 
     train_feats, test_feats, train_tgts, test_tgts = split_data(features, targets)
 
-    training_data, testing_data, training_answers, testing_answers = impute_and_scale(train_tgts, test_tgts, train_feats, test_feats)
+    training_data, testing_data, training_answers, testing_answers, imputing_fit, scaling_fit = impute_and_scale(train_tgts, test_tgts, train_feats, test_feats)
 
     model = fit_and_evaluate(model_type, training_data, training_answers, testing_data, testing_answers, VehicleTrim, trim_map, cv_test)
 
-    return model, trim_map, training_data, testing_data, training_answers, testing_answers
+    return model, trim_map, training_data, testing_data, training_answers, testing_answers, imputing_fit, scaling_fit
 
 
 

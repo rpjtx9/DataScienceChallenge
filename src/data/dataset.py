@@ -42,18 +42,18 @@ def get_listing_price_dataframe(training_dataset_filename):
     # Clean the data in the raw dataset to improve modeling behavior. Uncomment the to_csv option to export
     df = clean_dataframe(raw_dataset)
 
-    df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Listing_Price_Dataset.csv', index = False)
+    # df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Listing_Price_Dataset.csv', index = False)
 
     # Transform the dataframe by dummying categorical columns and adding log and sqrt functions for numerical columns. Uncomment the to_csv option to export
     features = transform_dataframe(df, VehicleTrim = False)
 
-    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Transformed_Listing_Price_Dataset.csv', index = False)
+    # features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Transformed_Listing_Price_Dataset.csv', index = False)
 
     # Remove features that are collinear to improve modeling behavior. Threshold is defaulted at 0.6 but can be adjusted. Uncomment the to_csv option to export
     features = generalize_collinear_feats(features, 0.6, 'Dealer_Listing_Price')
 
-    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Generalized_Listing_Price_Dataset.csv', index = False)
-
+    # features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Generalized_Listing_Price_Dataset.csv', index = False)
+    features.sort_index(axis = 1, inplace = True)
     return features
 
 
@@ -79,18 +79,18 @@ def get_vehicle_trim_dataframe(training_dataset_filename):
     # Clean the data in the raw dataset to improve modeling behavior. Uncomment the to_csv option to export
     df = clean_dataframe(raw_dataset)
 
-    df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Vehicle_Trim_Dataset.csv', index = False)
+    # df.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Cleaned_Vehicle_Trim_Dataset.csv', index = False)
 
     # Transform the dataframe by dummying categorical columns and adding log and sqrt functions for numerical columns. Uncomment the to_csv option to export
     features = transform_dataframe(df, VehicleTrim = True)
 
-    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Transformed_Vehicle_Trim_Dataset.csv', index = False)
+    # features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Transformed_Vehicle_Trim_Dataset.csv', index = False)
 
     # Remove features that are collinear to improve modeling behavior. Threshold is defaulted at 0.6 but can be adjusted. Uncomment the to_csv option to export
     features = generalize_collinear_feats(features, 0.6, 'Vehicle_Trim')
 
-    features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Generalized_Vehicle_Trim_Dataset.csv', index = False)
-
+    # features.to_csv('F:/Documents/Projects/DataScienceChallenge/data/Generalized_Vehicle_Trim_Dataset.csv', index = False)
+    features.sort_index(axis = 1, inplace = True)
     return features
 
 
@@ -116,7 +116,7 @@ def clean_dataframe(raw_dataset : pd.DataFrame):
     df = clean_SellerRating(df)
     df = clean_SellerListSrc(df)
     df = clean_SellerCity(df)
-    # df = clean_Vehicle_Trim(df)
+    df = clean_Vehicle_Trim(df)
 
     return df
 
@@ -306,7 +306,7 @@ def clean_SellerRating(df):
     df['SellerRating'] = np.where(df['SellerRevCnt'] < 25, np.nan, df['SellerRating'])
 
     # Drop SellerRevCnt as it is not longer useful
-    df.drop(columns = ['SellerRevCnt'])
+    df.drop(columns = ['SellerRevCnt'], inplace = True)
 
     return df
 
@@ -320,12 +320,14 @@ def clean_SellerListSrc(df):
     return df
 
 def clean_Vehicle_Trim(df):
-    df['Vehicle_Trim'] = df['Vehicle_Trim'].fillna('not specified')
-    frequency = df['Vehicle_Trim'].value_counts(normalize = True)
-    for trim in df['Vehicle_Trim'].values:
-        if frequency [trim] < 0.01:
-            df['Vehicle_Trim'] = df['Vehicle_Trim'].replace(trim, 'other')
-    
+    try:
+        df['Vehicle_Trim'] = df['Vehicle_Trim'].fillna('not specified')
+        frequency = df['Vehicle_Trim'].value_counts(normalize = True)
+        for trim in df['Vehicle_Trim'].values:
+            if frequency [trim] < 0.01:
+                df['Vehicle_Trim'] = df['Vehicle_Trim'].replace(trim, 'other')
+    except KeyError:
+        pass
     return df
 
 def transform_dataframe(df, VehicleTrim = True):
@@ -351,9 +353,10 @@ def add_log_and_sqrt_data(df, VehicleTrim = True):
             numbers['sqrt_of_' + column] = np.sqrt(numbers[column])
     
     numbers.replace([np.inf, -np.inf], np.nan, inplace = True)
-    numbers - numbers.fillna(np.nan)
+    numbers = numbers.fillna(np.nan)
 
     return numbers
+
 
 
 def get_categories(df, VehicleTrim = True):
